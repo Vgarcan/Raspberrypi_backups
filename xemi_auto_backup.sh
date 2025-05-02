@@ -88,7 +88,7 @@ run_backup() {
 
     log "Uploading to FTP..."
 
-    lftp -d -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
+    lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
 set ftp:ssl-allow no
 cd $FTP_REMOTE_PATH
 put "$BACKUP_FILE"
@@ -136,15 +136,39 @@ restore_backup() {
             else
                 echo "Log not found."
             fi
+
             echo -e "\nDo you want to restore this backup? (y/n)"
             read -r confirm
             if [ "$confirm" == "y" ]; then
-                echo "Downloading backup..."
-                lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "get $FTP_REMOTE_PATH/$BACKUP_NAME -o $TMP_DIR/$BACKUP_NAME; bye"
-                echo "Restoring backup..."
-                sudo fsarchiver restfs -v "$TMP_DIR/$BACKUP_NAME"
-                sudo rm -f "$TMP_DIR/$BACKUP_NAME"
-                echo "Restore completed."
+                echo "\nDetecting restore targets (excluding internal system)..."
+                TARGETS=($(lsblk -pnlo NAME | grep -v mmcblk0 | grep -E "/dev/sd|/dev/nvme"))
+                if [ ${#TARGETS[@]} -eq 0 ]; then
+                    echo "No external partitions available for restore."
+                    pause
+                    return
+                fi
+
+                echo "\nAvailable restore targets:"
+                for i in "${!TARGETS[@]}"; do
+                    echo "$((i+1))) ${TARGETS[$i]}"
+                done
+
+                echo -n "\nSelect the device number to restore to: "
+                read -r index
+                TARGET_DEVICE=${TARGETS[$((index-1))]}
+
+                echo -e "\n⚠️ WARNING: This will OVERWRITE all data on $TARGET_DEVICE. Are you sure? (y/n)"
+                read -r confirm2
+                if [ "$confirm2" == "y" ]; then
+                    echo "Downloading backup..."
+                    lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "get $FTP_REMOTE_PATH/$BACKUP_NAME -o $TMP_DIR/$BACKUP_NAME; bye"
+                    echo "Restoring backup to $TARGET_DEVICE..."
+                    sudo fsarchiver restfs -v "$TMP_DIR/$BACKUP_NAME" id=0,dest=$TARGET_DEVICE
+                    sudo rm -f "$TMP_DIR/$BACKUP_NAME"
+                    echo "Restore completed."
+                else
+                    echo "Restore cancelled."
+                fi
                 pause
                 return
             else
