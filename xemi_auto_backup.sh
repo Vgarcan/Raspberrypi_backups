@@ -4,7 +4,7 @@
 # XEMI AUTO BACKUP TOOL                         #
 # Menu-driven interface for Raspberry Pi backup #
 # Author: Victor G.C.                           #
-# Version: Full version with restore & cleanup  #
+# Version: Enhanced with device selection       #
 #################################################
 
 CONFIG_FILE="$HOME/.config/xemi_auto_backup/config.conf"
@@ -23,7 +23,7 @@ FTP_REMOTE_PATH="/volume(sda2)/Recovery/my-backups/raspberrypi"
 # ----------- INIT CONFIG ---------------------
 init_config() {
     mkdir -p "$LOG_DIR"
-    mkdir -p "$(dirname $CONFIG_FILE)"
+    mkdir -p "$(dirname "$CONFIG_FILE")"
     if [ ! -f "$CONFIG_FILE" ]; then
         echo "FTP_HOST=$FTP_HOST" > "$CONFIG_FILE"
         echo "FTP_USER=$FTP_USER" >> "$CONFIG_FILE"
@@ -50,8 +50,8 @@ clean_screen() {
 run_backup() {
     clean_screen
     TODAY=$(date +%F)
-    echo "Enter commit message:"; read COMMIT
-    echo "Enter description:"; read DESC
+    echo "Enter commit message:"; read -r COMMIT
+    echo "Enter description:"; read -r DESC
 
     NEXT_VERSION=$(ls "$TMP_DIR"/rpi_backup_${TODAY}_*.fsa 2>/dev/null | awk -F'_' '{print $NF}' | sed 's/.fsa//' | sort -n | tail -n 1)
     VERSION="001"
@@ -88,7 +88,7 @@ run_backup() {
 
     log "Uploading to FTP..."
 
-    lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
+    lftp -d -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" <<EOF
 set ftp:ssl-allow no
 cd $FTP_REMOTE_PATH
 put "$BACKUP_FILE"
@@ -136,41 +136,35 @@ restore_backup() {
             else
                 echo "Log not found."
             fi
-
             echo -e "\nDo you want to restore this backup? (y/n)"
             read -r confirm
             if [ "$confirm" == "y" ]; then
-                echo "\nDetecting restore targets (excluding internal system)..."
-                TARGETS=($(lsblk -pnlo NAME | grep -v mmcblk0 | grep -E "/dev/sd|/dev/nvme"))
-                if [ ${#TARGETS[@]} -eq 0 ]; then
-                    echo "No external partitions available for restore."
+                echo "Downloading backup..."
+                lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "get $FTP_REMOTE_PATH/$BACKUP_NAME -o $TMP_DIR/$BACKUP_NAME; bye"
+
+                echo "Available removable storage devices:"
+                # Identify the root device
+                ROOT_DEVICE=$(df / | tail -1 | awk '{print $1}' | sed 's/[0-9]*$//')
+                # List removable devices excluding the root device
+                mapfile -t DEVICES < <(lsblk -d -o NAME,SIZE,RM | awk -v root="${ROOT_DEVICE#/dev/}" '$3 == 1 && $1 != root {print $1 " (" $2 ")"}')
+                if [ ${#DEVICES[@]} -eq 0 ]; then
+                    echo "No removable storage devices found."
                     pause
                     return
                 fi
-
-                echo "\nAvailable restore targets:"
-                for i in "${!TARGETS[@]}"; do
-                    echo "$((i+1))) ${TARGETS[$i]}"
+                PS3=$'\nSelect the target device to restore the backup: '
+                select DEVICE in "${DEVICES[@]}" "Cancel"; do
+                    [ "$DEVICE" == "Cancel" ] && return
+                    if [ -n "$DEVICE" ]; then
+                        TARGET_DEVICE="/dev/$(echo "$DEVICE" | awk '{print $1}')"
+                        echo "Restoring backup to $TARGET_DEVICE..."
+                        sudo fsarchiver restfs -v "$TMP_DIR/$BACKUP_NAME" id=0,dest="$TARGET_DEVICE"
+                        sudo rm -f "$TMP_DIR/$BACKUP_NAME"
+                        echo "Restore completed."
+                        pause
+                        return
+                    fi
                 done
-
-                echo -n "\nSelect the device number to restore to: "
-                read -r index
-                TARGET_DEVICE=${TARGETS[$((index-1))]}
-
-                echo -e "\n⚠️ WARNING: This will OVERWRITE all data on $TARGET_DEVICE. Are you sure? (y/n)"
-                read -r confirm2
-                if [ "$confirm2" == "y" ]; then
-                    echo "Downloading backup..."
-                    lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "get $FTP_REMOTE_PATH/$BACKUP_NAME -o $TMP_DIR/$BACKUP_NAME; bye"
-                    echo "Restoring backup to $TARGET_DEVICE..."
-                    sudo fsarchiver restfs -v "$TMP_DIR/$BACKUP_NAME" id=0,dest=$TARGET_DEVICE
-                    sudo rm -f "$TMP_DIR/$BACKUP_NAME"
-                    echo "Restore completed."
-                else
-                    echo "Restore cancelled."
-                fi
-                pause
-                return
             else
                 echo "Cancelled."
                 pause
