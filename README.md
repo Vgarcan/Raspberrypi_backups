@@ -1,164 +1,257 @@
-# XEMI Auto Backup
+![XEMI Auto Backup - Header](xemi_auto_backup_header.png)
 
-**XEMI Auto Backup** is a professional, menu-driven backup and restore tool for Raspberry Pi systems. It uses `fsarchiver` and `lftp` to manage versioned backups, upload them to a remote FTP server, and restore them with logs and commit messages.
+# XEMI Auto Backup – Comprehensive Guide
+
+**XEMI Auto Backup** is a robust, interactive backup and restoration tool designed for Raspberry Pi systems. Leveraging the power of `fsarchiver` and `lftp`, it facilitates versioned backups, secure FTP uploads, and seamless restorations, all through an intuitive terminal-based menu.
 
 ---
 
-## Table of Contents
+## 📑 Table of Contents
 
+* [Overview](#overview)
 * [Features](#features)
-* [Requirements](#requirements)
+* [System Requirements](#system-requirements)
 * [Installation](#installation)
-* [Usage](#usage)
+* [Configuration](#configuration)
+* [Usage Guide](#usage-guide)
 
   * [1. Create New Backup](#1-create-new-backup)
   * [2. Restore Backup from FTP](#2-restore-backup-from-ftp)
   * [3. View Logs](#3-view-logs)
-  * [4. Clear Logs](#4-clear-logs)
+  * [4. Delete Backup from FTP](#4-delete-backup-from-ftp)
   * [5. Show Configuration](#5-show-configuration)
   * [6. Edit Configuration](#6-edit-configuration)
 * [File Structure](#file-structure)
-* [Restore on New SD Card](#restore-on-new-sd-card)
-* [Quick Command Setup (Optional)](#quick-command-setup-optional)
+* [Restoring on a New SD Card](#restoring-on-a-new-sd-card)
+* [Quick Command Setup](#quick-command-setup)
 * [License](#license)
+
+---
+
+## Overview
+
+**XEMI Auto Backup** automates the process of backing up and restoring Raspberry Pi systems. It creates compressed, versioned backups using `fsarchiver`, uploads them to a specified FTP server via `lftp`, and provides options to restore these backups when needed. The tool ensures data integrity through checksums and maintains detailed logs for each operation.
 
 ---
 
 ## Features
 
-* ✅ Easy-to-use interactive terminal menu
-* 📦 Versioned backups with commit messages and descriptions
-* ☁️ Automatic upload of backups and logs to an FTP server
-* 🔐 Configurable settings (FTP host, user, password, path)
-* 📝 Logs matched to each backup (same filename, `.log` extension)
-* ♻️ Automatic local cleanup after upload
-* 🔍 View full logs before restoring a backup
-* ⚠️ Excludes cloud/FTP paths to prevent recursive backups
-* 🧽 Ensures no local backup residue remains
+* **Interactive Menu**: User-friendly terminal interface for all operations.
+* **Versioned Backups**: Automatically names backups with date and incremental versioning.
+* **FTP Integration**: Securely uploads backups and logs to a remote FTP server.
+* **Configurable Settings**: Easily editable configuration file for FTP credentials and paths.
+* **Comprehensive Logging**: Generates detailed logs for each backup and restoration process.
+* **Automatic Cleanup**: Removes temporary files post-operation to conserve space.
+* **Selective Restoration**: Allows users to choose specific backups to restore.
+* **Exclusion Paths**: Prevents backup of specified directories to avoid redundancy.
 
 ---
 
-## Requirements
+## System Requirements
 
-* `fsarchiver`
-* `lftp`
-* A Raspberry Pi with sudo access
-* Remote FTP server with write access
+* **Hardware**: Raspberry Pi with sudo access.
+* **Software**:
 
-Install dependencies:
+  * `fsarchiver`: For creating and restoring backups.
+  * `lftp`: For FTP operations.
+* **Remote Server**: FTP server with write access for storing backups.
+
+**Installation of Dependencies**:
 
 ```bash
-sudo apt update && sudo apt install fsarchiver lftp
+sudo apt update
+sudo apt install fsarchiver lftp
 ```
 
 ---
 
 ## Installation
 
-```bash
-mv auto_backup.sh ~/.local/bin/xemi_auto_backup
-chmod +x ~/.local/bin/xemi_auto_backup
+1. **Download the Script**:
+
+   Save the `auto_backup.sh` script to your local machine.
+
+2. **Move and Rename the Script**:
+
+   ```bash
+   mv auto_backup.sh ~/.local/bin/xemi_auto_backup
+   ```
+
+3. **Make the Script Executable**:
+
+   ```bash
+   chmod +x ~/.local/bin/xemi_auto_backup
+   ```
+
+4. **Ensure the Script Directory is in PATH**:
+
+   ```bash
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+5. **Run the Script**:
+
+   ```bash
+   xemi_auto_backup
+   ```
+
+---
+
+## Configuration
+
+Upon the first run, the script initializes a configuration file at `~/.config/xemi_auto_backup/config.conf`. This file contains FTP credentials and paths.
+
+**Default Configuration**:
+
+```ini
+# FTP Configuration
+FTP_HOST=192.168.1.92
+FTP_USER=clouduser
+FTP_PASS=cloud842867
+FTP_REMOTE_PATH=/volume(sda2)/Recovery/my-backups/raspberrypi
 ```
 
-Ensure `~/.local/bin` is in your `PATH`:
+**Editing Configuration**:
+
+To modify the configuration, select option **6** from the main menu or manually edit the file:
 
 ```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-Run with:
-
-```bash
-xemi_auto_backup
+nano ~/.config/xemi_auto_backup/config.conf
 ```
 
 ---
 
-## Usage
+## Usage Guide
 
 ### 1. Create New Backup
 
-* Input a commit message and description
-* Backup will be created with a versioned filename: `rpi_backup_YYYY-MM-DD_001.fsa`
-* A matching `.log` file is generated
-* Both files are uploaded to the FTP server
-* Backup is removed locally after successful upload
+* **Process**:
+
+  * Prompts for a commit message and description.
+  * Creates a backup of the specified partition using `fsarchiver`.
+  * Generates a `.fsa` backup file and a corresponding `.log` file.
+  * Uploads both files to the configured FTP server.
+  * Cleans up local temporary files upon successful upload.
+
+* **Backup Naming Convention**:
+
+  ```
+  rpi_backup_YYYY-MM-DD_Version.fsa
+  ```
+
+  Example:
+
+  ```
+  rpi_backup_2025-05-04_001.fsa
+  ```
 
 ### 2. Restore Backup from FTP
 
-* Lists all available backups in the cloud with commit summaries
-* Lets you view the full log before restoring
-* Once confirmed, downloads the `.fsa` file and restores it with `fsarchiver`
+* **Process**:
+
+  * Lists available backups on the FTP server.
+  * Displays associated commit messages and descriptions.
+  * Allows selection of a specific backup to restore.
+  * Downloads the selected `.fsa` file.
+  * Prompts for the target device to restore the backup.
+  * Restores the backup using `fsarchiver`.
+
+* **Note**: Ensure the target device is correctly identified to prevent data loss.
 
 ### 3. View Logs
 
-* Displays all `.log` files stored locally
+* **Process**:
 
-### 4. Clear Logs
+  * Retrieves and displays log files from the FTP server.
+  * Shows details such as commit messages, descriptions, and operating system information.
 
-* Deletes all local logs
+### 4. Delete Backup from FTP
+
+* **Process**:
+
+  * Lists available backups on the FTP server.
+  * Prompts for selection of a backup to delete.
+  * Confirms deletion to prevent accidental data loss.
+  * Deletes both the `.fsa` and corresponding `.log` files from the FTP server.
 
 ### 5. Show Configuration
 
-* Prints the current FTP configuration
+* **Process**:
+
+  * Displays the current FTP configuration settings.
 
 ### 6. Edit Configuration
 
-* Opens `config.conf` in nano for easy editing
+* **Process**:
+
+  * Opens the configuration file in `nano` for editing.
 
 ---
 
 ## File Structure
 
-* **Logs**: `~/.local/share/xemi_auto_backup/logs`
+* **Script**: `~/.local/bin/xemi_auto_backup`
 * **Configuration**: `~/.config/xemi_auto_backup/config.conf`
-* **Temporary Backups**: `/tmp` (auto-deleted after upload)
+* **Logs**: `~/.local/share/xemi_auto_backup/logs/`
+* **Temporary Files**: `/tmp/` (e.g., `.fsa`, `.log`, `.backup_marker`)
 
 ---
 
-## Restore on New SD Card
+## Restoring on a New SD Card
 
-1. Flash a fresh Raspberry Pi OS
-2. Recreate the path `~/.local/bin/` and place the script there
-3. Make it executable:
+1. **Prepare the New SD Card**:
 
-```bash
-chmod +x ~/.local/bin/xemi_auto_backup
-```
+   * Flash a fresh Raspberry Pi OS onto the SD card.
 
-4. Run `xemi_auto_backup` and choose option 2 to restore from cloud
+2. **Set Up the Script**:
+
+   * Recreate the script directory:
+
+     ```bash
+     mkdir -p ~/.local/bin
+     ```
+
+   * Move and make the script executable:
+
+     ```bash
+     mv auto_backup.sh ~/.local/bin/xemi_auto_backup
+     chmod +x ~/.local/bin/xemi_auto_backup
+     ```
+
+3. **Run the Script**:
+
+   * Execute the script:
+
+     ```bash
+     xemi_auto_backup
+     ```
+
+   * Choose option **2** to restore from the cloud.
 
 ---
 
-## Quick Command Setup (Optional)
+## Quick Command Setup
 
-To run `xemi_auto_backup` from anywhere using just one command:
+To run `xemi_auto_backup` from any location:
 
-1. Move the script
+1. **Ensure the Script is in the PATH**:
 
-```bash
-mkdir -p ~/.local/bin
-mv auto_backup.sh ~/.local/bin/xemi_auto_backup
-chmod +x ~/.local/bin/xemi_auto_backup
-```
+   ```bash
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+   ```
 
-2. Add `~/.local/bin` to your `PATH`
+2. **Run the Script**:
 
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-3. Run it!
-
-```bash
-xemi_auto_backup
-```
+   ```bash
+   xemi_auto_backup
+   ```
 
 ---
 
 ## License
 
-Developed by Víctor G.C.
-For personal and educational use. Modify and improve freely.
+Developed by **Víctor G.C.**
+
+This tool is intended for personal and educational use. Feel free to modify and enhance it to suit your needs.
